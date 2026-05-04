@@ -113,7 +113,10 @@ The backend uses **LangGraph** agents powered by **Groq's llama-3.3-70b-versatil
 - **MySQL** - Database
 - **LangGraph** - AI agent orchestration
 - **LangChain** - Tool abstraction layer
-- **Groq API** (llama-3.3-70b-versatile) - LLM
+- **Groq API** (llama-3.3-70b-versatile) - Due to availability constraints
+
+This ensures compliance + performance.
+
 - **Pydantic** - Data validation
 
 ---
@@ -309,31 +312,15 @@ The LangGraph agent utilizes five specialized tools for sales-related activities
      - Provides confirmation of successful updates
    - **Use Cases**: Correcting information, updating follow-up status, refining summaries
 
-3. **summarize_interaction_tool**
-   - **Purpose**: Creates concise summaries of long interaction texts
-   - **Functionality**: Uses LLM to generate professional CRM summaries
-   - **Process**: Takes lengthy conversation text and produces 2-3 sentence summaries highlighting key points and outcomes
-
-4. **fetch_interaction_tool**
+3. **fetch_interaction_tool**
    - **Purpose**: Retrieves past interactions for reference and analysis
    - **Functionality**: Queries database with optional filtering
    - **Features**: Filter by doctor name, limit results, sort by recency
    - **Output**: List of interaction records with full details
 
-5. **suggest_next_action_tool**
-   - **Purpose**: Provides AI-generated follow-up recommendations
-   - **Functionality**: Analyzes interaction history and suggests next steps
-   - **Process**: Considers sentiment, previous interactions, and context to recommend optimal follow-up actions
-   - Retrieves past interactions
-   - Filters by doctor name or date range
+4. **delete_interaction_tool**
 
-6. **edit_interaction_tool**
-   - Updates existing interaction fields
-   - Validates field types
-
-7. **suggest_next_action_tool**
-   - Provides AI-generated follow-up recommendations
-   - Based on interaction history and sentiment
+5.**manual_interaction_tool**
 
 ---
 
@@ -467,19 +454,6 @@ System health check.
    ```
    "Had a meeting with Dr. Patel. Initial skepticism about pricing,
    but after showing ROI data, he warmed up. He wants to try a pilot program."
-   ```
-
-3. **Summary Request**
-
-   ```
-   "Can you summarize this long conversation I had with Dr. Brown about
-   market trends and competitive positioning?"
-   ```
-
-4. **Follow-up Suggestion**
-   ```
-   "What should I do next with Dr. Wilson after our negative interaction
-   about the new product features?"
    ```
 
 ---
@@ -639,4 +613,4 @@ For issues or questions:
 
 ---
 
-_Last Updated: April 2024_
+_Last Updated: April 2026_

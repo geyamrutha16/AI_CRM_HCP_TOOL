@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { addMessage, setLoading, setError } from "../store/chatSlice";
+import { addInteraction } from "../store/interactionsSlice";
 import { agentAPI } from "../services/api";
 import { toast } from "react-toastify";
 import "./ChatInterface.css";
@@ -58,6 +59,18 @@ export function ChatInterface() {
 
       // Show success toast if interaction was created
       if (response.interaction_id) {
+        const extracted = response.structured_data?.data || {};
+        dispatch(
+          addInteraction({
+            id: response.interaction_id,
+            doctor_name: extracted.doctor_name || "Unknown",
+            summary: extracted.summary || "",
+            sentiment: extracted.sentiment || "neutral",
+            follow_up: extracted.follow_up || "",
+            interaction_text: extracted.interaction_text || messageText,
+            created_at: new Date().toISOString(),
+          }),
+        );
         toast.success(`Interaction #${response.interaction_id} created!`, {
           position: "bottom-right",
           autoClose: 3000,

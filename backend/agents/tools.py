@@ -4,13 +4,14 @@ Each tool handles specific CRM operations with LLM-powered intelligence.
 """
 
 from langchain_groq import ChatGroq
-from langchain.tools import tool
 from pydantic import BaseModel, Field
 from typing import Optional
 from sqlalchemy.orm import Session
 from models.database import Interaction
 from datetime import datetime
 import json
+import re
+from time import perf_counter
 import config
 
 
@@ -52,7 +53,6 @@ class SummarizeInteractionInput(BaseModel):
     interaction_text: str = Field(..., description="Long interaction text to summarize")
 
 
-@tool(args_schema=LogInteractionInput)
 def log_interaction_tool(doctor_name: str, interaction_text: str, db_session: Session = None) -> dict:
     """
     Logs a new HCP interaction using AI extraction.
@@ -62,49 +62,49 @@ def log_interaction_tool(doctor_name: str, interaction_text: str, db_session: Se
     - Returns structured interaction data
     """
     
-    # Prompt for LLM to extract structured data
-    extraction_prompt = f"""
-    Analyze this healthcare interaction and extract:
-    1. Doctor's name (confirm or correct from: {doctor_name})
-    2. Summary (2-3 sentences)
-    3. Sentiment (positive/neutral/negative)
-    4. Follow-up action (if any)
-    
-    Interaction text:
-    {interaction_text}
-    
-    Return as JSON with keys: doctor_name, summary, sentiment, follow_up
-    """
-    
-    # Call LLM for extraction
-    response = llm.invoke(extraction_prompt)
-    
-    try:
-        # Parse LLM response
-        extracted = json.loads(response.content)
-    except json.JSONDecodeError:
-        # Fallback if JSON parsing fails
-        extracted = {
-            "doctor_name": doctor_name,
-            "summary": interaction_text[:200],
-            "sentiment": "neutral",
-            "follow_up": "Follow up in 1 week"
-        }
+    started_at = perf_counter()
+    print("[DEBUG][TOOL] log_interaction_tool start")
+
+    text = interaction_text.strip()
+    extracted_doctor = doctor_name
+    if not extracted_doctor:
+        match = re.search(r"\b(?:dr\.?|doctor)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b", interaction_text)
+        extracted_doctor = f"Dr. {match.group(1)}" if match else "Unknown"
+
+    lower_text = interaction_text.lower()
+    if "positive" in lower_text:
+        sentiment = "positive"
+    elif "negative" in lower_text:
+        sentiment = "negative"
+    else:
+        sentiment = "neutral"
+
+    follow_up_match = re.search(
+        r"(?:follow[\s-]?up(?: action)?(?: as| is|:)?\s*)([^,.]+)",
+        interaction_text,
+        re.IGNORECASE,
+    )
+    follow_up = follow_up_match.group(1).strip() if follow_up_match else "Follow up in 1 week"
+
+    # Keep summary deterministic and fast; avoid LLM latency for log flow.
+    summary = text[:220] if len(text) > 220 else text
     
     # Return structured data (database save will be done by route handler)
-    return {
+    result = {
         "status": "extracted",
         "data": {
-            "doctor_name": extracted.get("doctor_name", doctor_name),
-            "summary": extracted.get("summary", ""),
-            "sentiment": extracted.get("sentiment", "neutral"),
-            "follow_up": extracted.get("follow_up", ""),
+            "doctor_name": extracted_doctor,
+            "summary": summary,
+            "sentiment": sentiment,
+            "follow_up": follow_up,
             "interaction_text": interaction_text
         }
     }
+    elapsed_ms = int((perf_counter() - started_at) * 1000)
+    print(f"[DEBUG][TOOL] log_interaction_tool end elapsed_ms={elapsed_ms}")
+    return result
 
 
-@tool(args_schema=SummarizeInteractionInput)
 def summarize_interaction_tool(interaction_text: str) -> dict:
     """
     Converts long interaction text into a concise CRM summary.
@@ -127,7 +127,6 @@ def summarize_interaction_tool(interaction_text: str) -> dict:
     }
 
 
-@tool(args_schema=SuggestNextActionInput)
 def suggest_next_action_tool(interaction_id: int, context: Optional[str] = None, db_session: Session = None) -> dict:
     """
     Suggests next steps for follow-up based on interaction history.
@@ -163,7 +162,6 @@ def suggest_next_action_tool(interaction_id: int, context: Optional[str] = None,
     }
 
 
-@tool(args_schema=FetchInteractionInput)
 def fetch_interaction_tool(doctor_name: Optional[str] = None, limit: int = 10, db_session: Session = None) -> dict:
     """
     Retrieves interactions filtered by doctor name or recent.
@@ -190,6 +188,7 @@ def fetch_interaction_tool(doctor_name: Optional[str] = None, limit: int = 10, d
                 "summary": i.summary,
                 "sentiment": i.sentiment,
                 "follow_up": i.follow_up,
+                "interaction_text": i.interaction_text,
                 "created_at": i.created_at.isoformat()
             }
             for i in interactions
@@ -197,7 +196,6 @@ def fetch_interaction_tool(doctor_name: Optional[str] = None, limit: int = 10, d
     }
 
 
-@tool(args_schema=EditInteractionInput)
 def edit_interaction_tool(interaction_id: int, field: str, new_value: str, db_session: Session = None) -> dict:
     """
     Edits an existing interaction field.

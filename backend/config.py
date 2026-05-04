@@ -16,7 +16,7 @@ DATABASE_URL = os.getenv(
 
 # Groq API Configuration
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_MODEL = "llama-3.1-8b-instant"
 
 # FastAPI Settings
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
@@ -31,5 +31,5 @@ ALLOWED_ORIGINS = [
 ]
 
 # Agent Configuration
-AGENT_TIMEOUT = 30  # seconds
+AGENT_TIMEOUT = 20  # seconds
 MAX_TOKEN_LIMIT = 4096

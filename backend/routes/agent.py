@@ -10,6 +10,8 @@ from models.schemas import AgentRequest, AgentResponse, InteractionCreate
 from agents.agent import run_agent
 import asyncio
 import json
+from time import perf_counter
+import config
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -39,12 +41,19 @@ async def run_agent_endpoint(
     """
     
     try:
-        # Run agent (synchronous call)
-        agent_result = run_agent(request.message, db)
+        started_at = perf_counter()
+        print("[DEBUG][API] /agent/run hit")
+        # Run agent in thread with timeout so requests don't hang forever.
+        agent_result = await asyncio.wait_for(
+            asyncio.to_thread(run_agent, request.message, db),
+            timeout=config.AGENT_TIMEOUT
+        )
         
         # Extract structured data from tool result
         structured_data = agent_result.get("structured_data", {})
-        tool_used = agent_result.get("tool_used", "reasoning")
+        tool_used = agent_result.get("tool_used") or "reasoning"
+        if not isinstance(tool_used, str):
+            tool_used = "reasoning"
         
         # If data extraction was successful, save to database
         interaction_id = None
@@ -73,16 +82,29 @@ async def run_agent_endpoint(
             db.add(db_interaction)
             db.commit()
             db.refresh(db_interaction)
+            print(f"[DEBUG][API] DB write success interaction_id={db_interaction.id}")
             
             interaction_id = db_interaction.id
         
+        elapsed_ms = int((perf_counter() - started_at) * 1000)
+        print(f"[DEBUG][API] /agent/run done tool_used='{tool_used}' elapsed_ms={elapsed_ms}")
+        ai_message = agent_result.get("ai_message", "")
+        if interaction_id:
+            ai_message = f"Interaction saved successfully with ID #{interaction_id}."
+
         return AgentResponse(
-            ai_message=agent_result.get("ai_message", ""),
+            ai_message=ai_message,
             structured_data=structured_data,
             tool_used=tool_used,
             interaction_id=interaction_id
         )
-    
+    except asyncio.TimeoutError:
+        return AgentResponse(
+            ai_message="The AI service is taking longer than expected right now. Please retry in a moment.",
+            structured_data={"status": "timeout", "message": "Agent execution timed out"},
+            tool_used="reasoning",
+            interaction_id=None
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent execution error: {str(e)}")
 
